@@ -4,14 +4,15 @@ info:
   version: 1.0.0
   description: |
     REST API contract for the frontend in `frontend/`. All request and response
-    bodies use JSON unless otherwise noted. Protected endpoints require the
-    HTTP-only `access_token` cookie issued by registration or login. The
-    frontend must send requests with credentials enabled.
+    bodies use JSON unless otherwise noted. Protected endpoints accept either
+    the HTTP-only `access_token` cookie or a bearer token issued by registration
+    or login. The frontend should send requests with credentials enabled.
 servers:
   - url: http://localhost:8000
     description: Local backend
 security:
   - cookieAuth: []
+  - bearerAuth: []
 tags:
   - name: Authentication
   - name: Users
@@ -39,6 +40,8 @@ paths:
           headers:
             Set-Cookie:
               $ref: "#/components/headers/SessionCookie"
+            X-Auth-Token:
+              $ref: "#/components/headers/AuthToken"
           content:
             application/json:
               schema:
@@ -66,6 +69,8 @@ paths:
           headers:
             Set-Cookie:
               $ref: "#/components/headers/SessionCookie"
+            X-Auth-Token:
+              $ref: "#/components/headers/AuthToken"
           content:
             application/json:
               schema:
@@ -472,9 +477,17 @@ components:
       in: cookie
       name: access_token
       description: HTTP-only session/JWT cookie set by POST /auth/register and POST /auth/login.
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Opaque bearer token returned in the `X-Auth-Token` response header by registration and login.
   headers:
     SessionCookie:
       description: Authentication token cookie. Set as HttpOnly; use Secure over HTTPS and an appropriate SameSite policy.
+      schema:
+        type: string
+    AuthToken:
+      description: Opaque token accepted in the Authorization Bearer header.
       schema:
         type: string
   parameters:

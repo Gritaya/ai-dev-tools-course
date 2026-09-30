@@ -1,0 +1,20 @@
+[project]
+name = "mini-kanban-backend"
+version = "0.1.0"
+description = "FastAPI backend for the Mini Kanban frontend"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115,<1.0",
+    "email-validator>=2.0,<3.0",
+    "pyyaml>=6.0,<7.0",
+    "uvicorn[standard]>=0.30,<1.0",
+]
+
+[dependency-groups]
+dev = [
+    "httpx>=0.27,<1.0",
+    "pytest>=8.0,<9.0",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
