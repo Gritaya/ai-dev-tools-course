@@ -1,0 +1,756 @@
+openapi: 3.1.0
+info:
+  title: Mini Kanban API
+  version: 1.0.0
+  description: |
+    REST API contract for the frontend in `frontend/`. All request and response
+    bodies use JSON unless otherwise noted. Protected endpoints require the
+    HTTP-only `access_token` cookie issued by registration or login. The
+    frontend must send requests with credentials enabled.
+servers:
+  - url: http://localhost:8000
+    description: Local backend
+security:
+  - cookieAuth: []
+tags:
+  - name: Authentication
+  - name: Users
+  - name: Boards
+  - name: Members
+  - name: Columns
+  - name: Tasks
+paths:
+  /auth/register:
+    post:
+      tags: [Authentication]
+      summary: Register and sign in a user
+      description: Public endpoint. Creates the account, starts a session, and sets the authentication cookie.
+      operationId: register
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterInput"
+      responses:
+        "201":
+          description: Account created and signed in
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /auth/login:
+    post:
+      tags: [Authentication]
+      summary: Sign in
+      description: Public endpoint. Sets the authentication cookie on successful login.
+      operationId: login
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/Credentials"
+      responses:
+        "200":
+          description: Signed in
+          headers:
+            Set-Cookie:
+              $ref: "#/components/headers/SessionCookie"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /auth/logout:
+    post:
+      tags: [Authentication]
+      summary: Sign out
+      description: Clears the authentication cookie. Safe to call when already signed out.
+      operationId: logout
+      security: []
+      responses:
+        "204":
+          description: Signed out; no response body
+          headers:
+            Set-Cookie:
+              description: Expire the `access_token` cookie.
+              schema:
+                type: string
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Get the current user
+      description: Returns `null` when there is no valid session so the frontend can distinguish signed-out state from a request error.
+      operationId: getCurrentUser
+      security: []
+      responses:
+        "200":
+          description: Current user, or null when signed out
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/User"
+                  - type: "null"
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      description: Lists registered users. Requires a signed-in user.
+      operationId: listUsers
+      responses:
+        "200":
+          description: Users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+  /boards:
+    get:
+      tags: [Boards]
+      summary: List the current user's boards
+      operationId: listBoards
+      responses:
+        "200":
+          description: Boards the current user owns or is a member of
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Board"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+    post:
+      tags: [Boards]
+      summary: Create a board
+      description: The caller becomes the owner and sole member. The backend also creates the default To Do, In Progress, and Done columns.
+      operationId: createBoard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoardNameInput"
+      responses:
+        "201":
+          description: Created board
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /boards/{board_id}:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+    get:
+      tags: [Boards]
+      summary: Get a board and all data needed to render it
+      operationId: getBoard
+      responses:
+        "200":
+          description: Board, ordered columns, ordered tasks, and board members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardDetail"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    patch:
+      tags: [Boards]
+      summary: Rename a board
+      description: Owner only.
+      operationId: renameBoard
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BoardNameInput"
+      responses:
+        "200":
+          description: Updated board
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Board"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [Boards]
+      summary: Delete a board and its columns and tasks
+      description: Owner only.
+      operationId: deleteBoard
+      responses:
+        "204":
+          description: Board deleted; no response body
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /boards/{board_id}/members:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+    post:
+      tags: [Members]
+      summary: Add a registered user to a board
+      description: Owner only. The user is identified by email.
+      operationId: addMember
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MemberInput"
+      responses:
+        "200":
+          description: Added member
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /boards/{board_id}/members/{user_id}:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+      - $ref: "#/components/parameters/UserId"
+    delete:
+      tags: [Members]
+      summary: Remove a member from a board
+      description: Owner only. The owner cannot be removed. Tasks assigned to the removed member become unassigned.
+      operationId: removeMember
+      responses:
+        "204":
+          description: Member removed; no response body
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /boards/{board_id}/columns:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+    post:
+      tags: [Columns]
+      summary: Create a column
+      description: Owner only. New columns are appended after existing columns.
+      operationId: createColumn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColumnNameInput"
+      responses:
+        "201":
+          description: Created column
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardColumn"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /boards/{board_id}/columns/reorder:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+    patch:
+      tags: [Columns]
+      summary: Reorder all columns on a board
+      description: Owner only. `orderedColumnIds` must contain every column on the board exactly once.
+      operationId: reorderColumns
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColumnOrderInput"
+      responses:
+        "200":
+          description: Columns in their new order
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/BoardColumn"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /columns/{column_id}:
+    parameters:
+      - $ref: "#/components/parameters/ColumnId"
+    patch:
+      tags: [Columns]
+      summary: Rename a column
+      description: Owner of the column's board only.
+      operationId: renameColumn
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ColumnNameInput"
+      responses:
+        "200":
+          description: Updated column
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BoardColumn"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [Columns]
+      summary: Delete an empty column
+      description: Owner of the column's board only. Columns containing tasks cannot be deleted; move or delete their tasks first.
+      operationId: deleteColumn
+      responses:
+        "204":
+          description: Column deleted; no response body
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+  /boards/{board_id}/tasks:
+    parameters:
+      - $ref: "#/components/parameters/BoardId"
+    post:
+      tags: [Tasks]
+      summary: Create a task on a board
+      description: Any board member may create a task. Its column must belong to this board and its assignee, if any, must be a board member.
+      operationId: createTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskCreateInput"
+      responses:
+        "201":
+          description: Created task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+  /tasks/{task_id}:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+    patch:
+      tags: [Tasks]
+      summary: Update task details
+      description: Any board member may update task details. Use the move endpoint to change column or ordering; a supplied `columnId` is ignored.
+      operationId: updateTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskUpdateInput"
+      responses:
+        "200":
+          description: Updated task
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+    delete:
+      tags: [Tasks]
+      summary: Delete a task
+      description: Any board member may delete a task.
+      operationId: deleteTask
+      responses:
+        "204":
+          description: Task deleted; no response body
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+  /tasks/{task_id}/move:
+    parameters:
+      - $ref: "#/components/parameters/TaskId"
+    patch:
+      tags: [Tasks]
+      summary: Move a task to a column and position
+      description: Any board member may move a task. The destination column must belong to the same board. Positions are zero-based; values outside the available range are clamped.
+      operationId: moveTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TaskMoveInput"
+      responses:
+        "200":
+          description: Moved task with updated column and position
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Task"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          $ref: "#/components/responses/ValidationError"
+components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: HTTP-only session/JWT cookie set by POST /auth/register and POST /auth/login.
+  headers:
+    SessionCookie:
+      description: Authentication token cookie. Set as HttpOnly; use Secure over HTTPS and an appropriate SameSite policy.
+      schema:
+        type: string
+  parameters:
+    BoardId:
+      name: board_id
+      in: path
+      required: true
+      schema:
+        type: string
+    UserId:
+      name: user_id
+      in: path
+      required: true
+      schema:
+        type: string
+    ColumnId:
+      name: column_id
+      in: path
+      required: true
+      schema:
+        type: string
+    TaskId:
+      name: task_id
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Unauthorized:
+      description: Missing or invalid authentication
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Forbidden:
+      description: Authenticated user is not allowed to perform this operation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    NotFound:
+      description: Resource does not exist or is not visible to the caller
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Request conflicts with existing data or a business rule
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    ValidationError:
+      description: Request body failed validation
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+  schemas:
+    User:
+      type: object
+      additionalProperties: false
+      required: [id, email, name]
+      properties:
+        id:
+          type: string
+        email:
+          type: string
+          format: email
+        name:
+          type: string
+    Board:
+      type: object
+      additionalProperties: false
+      required: [id, name, ownerId, memberIds, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        ownerId:
+          type: string
+        memberIds:
+          type: array
+          items:
+            type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    BoardColumn:
+      type: object
+      additionalProperties: false
+      required: [id, boardId, name, position]
+      properties:
+        id:
+          type: string
+        boardId:
+          type: string
+        name:
+          type: string
+        position:
+          type: integer
+          minimum: 0
+    Task:
+      type: object
+      additionalProperties: false
+      required: [id, boardId, columnId, title, position, createdAt, updatedAt]
+      properties:
+        id:
+          type: string
+        boardId:
+          type: string
+        columnId:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          default: ""
+        assigneeId:
+          type: [string, "null"]
+        priority:
+          oneOf:
+            - $ref: "#/components/schemas/Priority"
+            - type: "null"
+        dueDate:
+          type: [string, "null"]
+          format: date
+        position:
+          type: integer
+          minimum: 0
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+    BoardDetail:
+      type: object
+      additionalProperties: false
+      required: [board, columns, tasks, members]
+      properties:
+        board:
+          $ref: "#/components/schemas/Board"
+        columns:
+          type: array
+          items:
+            $ref: "#/components/schemas/BoardColumn"
+        tasks:
+          type: array
+          items:
+            $ref: "#/components/schemas/Task"
+        members:
+          type: array
+          items:
+            $ref: "#/components/schemas/User"
+    Priority:
+      type: string
+      enum: [low, medium, high]
+    Credentials:
+      type: object
+      additionalProperties: false
+      required: [email, password]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+    RegisterInput:
+      type: object
+      additionalProperties: false
+      required: [email, password, name]
+      properties:
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          format: password
+        name:
+          type: string
+    BoardNameInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+    MemberInput:
+      type: object
+      additionalProperties: false
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+    ColumnNameInput:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+    ColumnOrderInput:
+      type: object
+      additionalProperties: false
+      required: [orderedColumnIds]
+      properties:
+        orderedColumnIds:
+          type: array
+          items:
+            type: string
+    TaskCreateInput:
+      type: object
+      additionalProperties: false
+      required: [title, columnId]
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+          default: ""
+        columnId:
+          type: string
+        assigneeId:
+          type: [string, "null"]
+        priority:
+          oneOf:
+            - $ref: "#/components/schemas/Priority"
+            - type: "null"
+        dueDate:
+          type: [string, "null"]
+          format: date
+    TaskUpdateInput:
+      type: object
+      additionalProperties: false
+      minProperties: 1
+      description: Partial task fields. Null clears assignee, priority, or due date. columnId may be sent by the frontend but does not change task placement.
+      properties:
+        title:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        columnId:
+          type: string
+        assigneeId:
+          type: [string, "null"]
+        priority:
+          oneOf:
+            - $ref: "#/components/schemas/Priority"
+            - type: "null"
+        dueDate:
+          type: [string, "null"]
+          format: date
+    TaskMoveInput:
+      type: object
+      additionalProperties: false
+      required: [toColumnId, toPosition]
+      properties:
+        toColumnId:
+          type: string
+        toPosition:
+          type: integer
+    Error:
+      type: object
+      additionalProperties: false
+      required: [message]
+      properties:
+        message:
+          type: string
