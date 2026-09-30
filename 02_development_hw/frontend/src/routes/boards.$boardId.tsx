@@ -101,9 +101,16 @@ function BoardView({ me }: { me: User }) {
 
   function swapCol(i: number, dir: -1 | 1) {
     const ids = columns.map((c) => c.id);
-    [ids[i], ids[i + dir]] = [ids[i + dir], ids[i]];
+    const adjacentIndex = i + dir;
+    const currentId = ids[i];
+    const adjacentId = ids[adjacentIndex];
+    if (currentId === undefined || adjacentId === undefined) return;
+    ids[i] = adjacentId;
+    ids[adjacentIndex] = currentId;
     reorder.mutate(ids);
   }
+
+  const editingTaskId = dialog?.task?.id;
 
   return (
     <main className="flex flex-1 flex-col px-6 py-6">
@@ -244,12 +251,23 @@ function BoardView({ me }: { me: User }) {
 
       <TaskDialog
         open={!!dialog}
-        onOpenChange={(o) => !o && setDialog(null)}
+        onOpenChange={(o) => {
+          if (!o) setDialog(null);
+        }}
         task={dialog?.task ?? null}
         columnId={dialog?.columnId ?? ""}
         members={members}
-        onSave={(input) => save.mutate({ id: dialog?.task?.id, input }, { onSuccess: () => setDialog(null) })}
-        onDelete={dialog?.task ? () => delTask.mutate(dialog.task!.id, { onSuccess: () => setDialog(null) }) : undefined}
+        onSave={(input) => {
+          save.mutate(
+            editingTaskId ? { id: editingTaskId, input } : { input },
+            { onSuccess: () => setDialog(null) },
+          );
+        }}
+        {...(editingTaskId
+          ? {
+              onDelete: () => delTask.mutate(editingTaskId, { onSuccess: () => setDialog(null) }),
+            }
+          : {})}
       />
     </main>
   );
