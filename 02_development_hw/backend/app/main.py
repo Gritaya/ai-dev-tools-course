@@ -13,7 +13,7 @@ from app.store import ApiError
 app = FastAPI(
     title="Mini Kanban API",
     version="1.0.0",
-    description="In-memory FastAPI backend for the Mini Kanban frontend.",
+    description="SQLAlchemy-backed FastAPI backend for the Mini Kanban frontend.",
 )
 
 app.add_middleware(

@@ -1,10 +1,27 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import pytest
 import yaml
 
-from app.store import verify_password
 import app.store as store_module
+from app.store import Store, verify_password
+
+
+def test_store_persists_data_and_sessions_between_instances(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'persisted.db'}")
+    first = Store(seed=False)
+    user = first.create_user("user@example.com", "secret", "Test User")
+    board = first.create_board(user, "Persistent board")
+    token = first.issue_token(user.id)
+
+    second = Store(seed=False)
+
+    assert second.authenticate("user@example.com", "secret") == user
+    assert second.user_for_token(token) == user
+    assert [item.id for item in second.list_boards(user)] == [board.id]
 
 
 def test_published_openapi_is_repository_contract(client: TestClient):
@@ -64,7 +81,7 @@ def test_register_hashes_password_and_sets_session(client: TestClient):
     assert response.json()["email"] == "new@example.com"
     assert response.json()["name"] == "New User"
     assert "secret" not in response.text
-    stored_hash = store_module.store.password_hashes[response.json()["id"]]
+    stored_hash = store_module.store.password_hash_for(response.json()["id"])
     assert stored_hash != "secret"
     assert verify_password("secret", stored_hash)
     assert not verify_password("wrong", stored_hash)

@@ -8,7 +8,7 @@ import app.store as store_module
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch):
-    test_store = Store(seed=True)
+    test_store = Store(database_url="sqlite://", seed=True)
     monkeypatch.setattr(store_module, "store", test_store)
     from app import auth
     from app.routers import auth as auth_router
@@ -30,4 +30,3 @@ def demo_headers(client: TestClient) -> dict[str, str]:
     )
     assert response.status_code == 200
     return {"Authorization": f"Bearer {response.headers['x-auth-token']}"}
-
