@@ -12,5 +12,5 @@
 # Architecture rules
 
 - All backend calls go through `getService()` (src/services/index.ts), which returns a `KanbanService`. Why: the UI can swap the mock for a real backend in one place.
-- `createMockService` (src/services/mock.ts) is the default backend. It saves to localStorage in the browser and to memory in tests. Why: the app runs with no server.
+- `createHttpService` (src/services/http.ts) is the default backend client and reads `VITE_API_URL` (default: `http://127.0.0.1:8000`).
 - Service tests use `createMockService({ store: memoryStore() })` and run with `bun run test` (vitest). Why: each test is isolated and fast.
